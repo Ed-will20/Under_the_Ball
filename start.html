@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hand Under Ball Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { background: #f0f0f0; display: block; }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font: 20px sans-serif;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="info"></div>
+  <script>
+    (function() {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      // Fullscreen canvas:
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      // Game variables
+      const ball = {
+        x: canvas.width / 2,
+        y: 100,
+        radius: 20,
+        vy: 0,
+        vx: 0, // for simplicity, no horizontal movement
+      };
+      const gravity = 0.5;
+      const damping = 0.8;
+      const groundY = canvas.height - 50; // 50px above bottom
+      const stopThreshold = 1; // if |vy| < 1 after bounce, consider stopped
+
+      let mouseX = 0, mouseY = 0;
+      let prevMouseSide = null; // 'left', 'right', or 'under'
+      const threshold = ball.radius; // define “under” as within ±radius horizontally
+      let score = 0;
+      let gameOver = false;
+
+      // Mouse tracking
+      canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+      });
+
+      function updateBall() {
+        if (gameOver) return;
+        // Apply gravity
+        ball.vy += gravity;
+        // Update position
+        ball.y += ball.vy;
+        ball.x += ball.vx;
+
+        // Ground bounce
+        if (ball.y + ball.radius >= groundY) {
+          ball.y = groundY - ball.radius;
+          ball.vy = -ball.vy * damping;
+          // If bounce is very small, stop the ball
+          if (Math.abs(ball.vy) < stopThreshold) {
+            ball.vy = 0;
+          }
+        }
+      }
+
+      function updateScoreBasedOnMouseCrossing() {
+        if (gameOver) return;
+        // Determine current mouse side relative to ball:
+        let side;
+        if (mouseX < ball.x - threshold) {
+          side = 'left';
+        } else if (mouseX > ball.x + threshold) {
+          side = 'right';
+        } else {
+          side = 'under';
+        }
+
+        if (prevMouseSide) {
+          // Check if crossing occurred: left→under→right or right→under→left
+          if (prevMouseSide === 'left' && side === 'right') {
+            score++;
+          } else if (prevMouseSide === 'right' && side === 'left') {
+            score++;
+          }
+          // Alternatively, require side==='under' at moment of crossing:
+          // More robust: if prevMouseSide==='left' && mouseX > ball.x+threshold OR
+          // prev==='right' && mouseX < ball.x-threshold, but that may count too eagerly.
+        }
+        prevMouseSide = side;
+      }
+
+      function checkGameOver() {
+        if (gameOver) return;
+        // 1. If ball stopped bouncing (vy == 0 and on ground):
+        if (ball.vy === 0 && ball.y + ball.radius >= groundY - 0.1) {
+          gameOver = true;
+          return;
+        }
+        // 2. If mouse “hits” the ball:
+        // Simple circle-point collision:
+        const dx = mouseX - ball.x;
+        const dy = mouseY - ball.y;
+        if (dx*dx + dy*dy <= ball.radius * ball.radius) {
+          gameOver = true;
+          return;
+        }
+      }
+
+      function draw() {
+        // Clear
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw ground line
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        ctx.lineTo(canvas.width, groundY);
+        ctx.strokeStyle = '#888';
+        ctx.stroke();
+        ctx.closePath();
+
+        // Draw ball
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+        ctx.closePath();
+
+        // Draw score
+        ctx.font = '20px sans-serif';
+        ctx.fillStyle = '#000';
+        ctx.fillText(`Score: ${score}`, 10, 30);
+
+        // If game over, overlay message
+        if (gameOver) {
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#fff';
+          ctx.font = '40px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`Game Over`, canvas.width/2, canvas.height/2 - 20);
+          ctx.fillText(`Final Score: ${score}`, canvas.width/2, canvas.height/2 + 30);
+        }
+      }
+
+      function gameLoop() {
+        updateBall();
+        updateScoreBasedOnMouseCrossing();
+        checkGameOver();
+        draw();
+        if (!gameOver) {
+          requestAnimationFrame(gameLoop);
+        }
+      }
+
+      // Start the game
+      requestAnimationFrame(gameLoop);
+
+      // (Optional) click or key to restart:
+      canvas.addEventListener('click', () => {
+        if (gameOver) {
+          // Reset game state
+          ball.x = canvas.width / 2;
+          ball.y = 100;
+          ball.vy = 0;
+          score = 0;
+          prevMouseSide = null;
+          gameOver = false;
+          requestAnimationFrame(gameLoop);
+        }
+      });
+
+      // Show info overlay if desired
+      const infoDiv = document.getElementById('info');
+      function updateInfo() {
+        infoDiv.textContent = `Move mouse left↔right under the ball without touching it. Score increases each crossing. Click to restart when over.`;
+      }
+      updateInfo();
+    })();
+  </script>
+</body>
+</html>
